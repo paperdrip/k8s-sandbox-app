@@ -38,6 +38,12 @@ type Configuration struct {
 	RedisPort string
 }
 
+// PostData is a struct representing the data sent in request
+type PostData struct {
+	Username string `json:"username"`
+	Message  string `json:"message"`
+}
+
 func setEnv() {
 	file, err := os.Open(configFile)
 	if err != nil {
@@ -69,10 +75,14 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleQuery(w http.ResponseWriter, r *http.Request) {
-
+	pool := newPool(false)
+	conn := pool.Get()
+	defer conn.Close()
+	content, _ := get(conn)
+	json.NewEncoder(w).Encode(content)
 }
 
-func newPoll(write bool) *redis.Pool {
+func newPool(write bool) *redis.Pool {
 	setEnv() // Creating a separate function for initializing the connection to redis, instead of coupling with the main function
 	return &redis.Pool{
 		// Maximum idle connections in the pool
@@ -85,13 +95,32 @@ func newPoll(write bool) *redis.Pool {
 			if err != nil {
 				log.Println("cannot reach redis server", err)
 			}
-			_, err := c.Do("AUTH", redisPassword)
+			_, err = c.Do("AUTH", redisPassword)
 			if err != nil {
 				log.Println("cannot authenticate to redis server", err)
 			}
 			return c, err
 		},
 	}
+}
+
+func get(c redis.Conn) ([]PostData, error) {
+	results := []PostData{}
+	_, err := c.Do("AUTH", redisPassword)
+	if err != nil {
+		log.Println("cannot authenticate to redis", err)
+	}
+	// Keys are in string array so we use redis.Strings
+	keys, err := redis.Strings(c.Do("KEYS", "*"))
+	if err != nil {
+		return results, err
+	}
+	for _, k := range keys {
+		if v, err := redis.String(c.Do("GET", k)); err == nil {
+			results = append(results, PostData{k, v})
+		}
+	}
+	return results, nil
 }
 
 func commondMiddleware(next http.Handler) http.Handler {

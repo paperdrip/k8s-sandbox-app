@@ -1,0 +1,4 @@
+{
+    "RedisHost": "localhost",
+    "RedisPort": "6379"
+}

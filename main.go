@@ -123,6 +123,18 @@ func get(c redis.Conn) ([]PostData, error) {
 	return results, nil
 }
 
+func set(c redis.Conn, key string, value string) error {
+	_, err := c.Do("AUTH", redisPassword)
+	if err != nil {
+		log.Println("cannot authenticate to redis", err)
+	}
+	_, err = c.DO("SET", key, value)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func commondMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Content-Type", "application/json")
